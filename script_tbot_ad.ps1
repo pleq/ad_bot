@@ -1,0 +1,207 @@
+### emir_m@tvsi.ru ###
+### Скрипт отсылает события журналов Windows в чат Телеграм ###
+
+Import-Module -Name "PoshGram"
+[string]$botToken="342342341234:SDGFGDFHds-oVDHYUsbdBFAZDFBFDZFV-w1" # bot token here
+[string]$chatId="-523645345634" # chat ID here
+
+$EventId = 4720, 4726, 4729, 4728, 5139, 4743, 4741, 4719, 1102, 4725
+
+### внутри файла дата предыдущего запуска задачи (скрипта) в текстовом виде ###
+$prev_date = Get-Content .\date.txt
+
+### преобразование строки в объект [Datetime] ###
+$start_time = [Datetime]::ParseExact($prev_date, 'yyyy-MM-ddTHH:mm:ss.fffzzz', $null)
+
+### запись текущей даты (время запуска задачи) ###
+$current_date = Get-Date 
+
+### StartTime = дата предыдущего запуска задачи, которую получили из файла .\date.txt ###
+### EndTime = Get-Date текущее время ###
+$params = @{Logname = "Security" ; ID = $EventId; StartTime = $start_time; EndTime = $current_date}
+
+### Get-WinEvent получает все события с указанными ID, произошедшие за последние N минут, начиная с самых "старых" ###
+$events = Get-WinEvent -Oldest -FilterHashtable $params
+
+### запись даты запуска текущей задачи в файл .\date.txt ###
+$end_time = Get-Date $current_date -Format 'yyyy-MM-ddTHH:mm:ss.fffzzz'
+$end_time | Out-File .\date.txt
+
+foreach ($entry in $events) 
+{
+  switch ($entry.Id)
+  {
+    ### Computer account was moved ###
+    5139 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+      $computer = $entry.Properties[8].Value.Split(",")[0].Split("=")[1]
+      $oldDN = $entry.Properties[8].Value.Split(",")[1].Split("=")[1]
+      $newDN = $entry.Properties[9].Value.Split(",")[1].Split("=")[1]
+      $admin = $entry.Properties[3].Value
+      $domain = $entry.Properties[4].Value
+
+      $message = "<b>computer account was moved</b>
+admin: <pre>$domain/$admin</pre>
+computer: <pre>$domain/$computer</pre>
+from OU: <pre>$oldDN</pre>
+to new OU: <pre>$newDN</pre>
+time: <pre>$ev_date</pre>"
+      Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+    }
+    
+    ### Computer account was created ###
+    4741 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+      $computer = $entry.Properties[0].Value
+      $admin = $entry.Properties[4].Value
+      $domain = $entry.Properties[1].Value
+      $OU = Get-ADComputer -Identity $entry.Properties[0].Value -Properties DistinguishedName | Select-Object -ExpandProperty DistinguishedName
+      $OU = $OU.Remove($OU.IndexOf(",DC=",13))
+
+      $message = "<b>computer account was created</b>
+admin: <pre>$domain/$admin</pre>
+computer: <pre>$domain/$computer</pre>
+OU: <pre>$OU</pre>
+time: <pre>$ev_date</pre>"
+      Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+    }
+
+    ### Computer account was deleted ###
+    4743 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+      $computer = $entry.Properties[0].Value
+      $admin = $entry.Properties[4].Value
+      $domain = $entry.Properties[1].Value
+
+      $message = "<b>computer account was deleted</b>
+admin: <pre>$domain/$admin</pre>
+computer: <pre>$domain/$computer</pre>
+time: <pre>$ev_date</pre>"
+      Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+    }
+
+    ### User account was created ###
+    4720 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+      $user = $entry.Properties[0].Value
+      $admin = $entry.Properties[4].Value
+      $domain = $entry.Properties[1].Value
+      $displayName = Get-ADUser -Identity $user -Properties DisplayName | Select-Object -ExpandProperty DisplayName
+
+      $message = "<b>user account was created</b>
+admin: <pre>$domain/$admin</pre>
+user: <pre>$domain/$user</pre>
+display name: <pre>$displayName</pre>
+time: <pre>$ev_date</pre>"
+      Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+    }
+
+    ### User account was deleted ###
+    4726 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+      $user = $entry.Properties[0].Value
+      $admin = $entry.Properties[4].Value
+      $domain = $entry.Properties[1].Value
+
+      $message = "<b>user account was deleted</b>
+admin: <pre>$domain/$admin</pre>
+user: <pre>$domain/$user</pre>
+time: <pre>$ev_date</pre>"
+      Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+    }
+    
+    ### User account was added to group ###
+    4728 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+      $admin = $entry.Properties[6].Value
+      $domain = $entry.Properties[3].Value
+      $cn = $entry.Properties[0].Value
+      $group = $entry.Properties[2].Value
+      $user = $cn.Remove($cn.IndexOf(",DC=",13))
+      
+      $message = "<b>user account was added to $group</b>
+admin: <pre>$domain/$admin</pre>
+user: <pre>$user</pre>
+time: <pre>$ev_date</pre>"
+      Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+    }
+
+    ### User account was removed from group ###
+    4729 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+      $admin = $entry.Properties[6].Value
+      $domain = $entry.Properties[3].Value
+      $cn = $entry.Properties[0].Value
+      $group = $entry.Properties[2].Value
+      $user = $cn.Remove($cn.IndexOf(",DC=",13))
+      
+      $message = "<b>user account was removed from $group</b>
+admin: <pre>$domain/$admin</pre>
+user: <pre>$user</pre>
+time: <pre>$ev_date</pre>"
+      Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+    }
+
+    ### System audit policy was changed ###
+    4719 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+      
+      $message = "<b>system audit policy was changed</b>
+time: <pre>$ev_date</pre>"
+      Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+    }
+
+    ### Audit log was cleared. This can relate to a potential attack ###
+    1102 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+      
+      $message = "<b>Audit log was cleared. This can relate to a potential attack</b>
+time: <pre>$ev_date</pre>"
+      Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+    }
+
+    ### A user account was disabled ###
+    4725 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+      
+      $message = "<b>A user account was disabled</b>
+time: <pre>$ev_date</pre>"
+      Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+    }
+  }
+}
+
+
+
+
+
