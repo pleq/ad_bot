@@ -2,7 +2,7 @@
 ### Скрипт отсылает события журналов Windows в чат Телеграм ###
 
 Import-Module -Name "PoshGram"
-[string]$botToken="342342341234:SDGFGDFHds-oVDHYUsbdBFAZDFBFDZFV-w1" # bot token here
+[string]$botToken="342342341234:SDGFGDFHds-oVDHYUsbdBFAZDFBFDZFV-w1" # bot token here (don't try, this one is fake :)
 [string]$chatId="-523645345634" # chat ID here
 
 $EventId = 4720, 4726, 4729, 4728, 5139, 4743, 4741, 4719, 1102, 4725
