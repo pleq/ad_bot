@@ -5,7 +5,7 @@ Import-Module -Name "PoshGram"
 [string]$botToken="342342341234:SDGFGDFHds-oVDHYUsbdBFAZDFBFDZFV-w1" # bot token here (don't try, this one is fake :)
 [string]$chatId="-523645345634" # chat ID here
 
-$EventId = 4720, 4726, 4729, 4728, 5139, 4743, 4741, 4719, 1102, 4725
+$EventId = 4720, 4726, 4729, 4728, 5139, 4743, 4741, 4719, 1102, 4725, 4698, 4740, 4727, 4754
 
 ### внутри файла дата предыдущего запуска задачи (скрипта) в текстовом виде ###
 $prev_date = Get-Content .\date.txt
@@ -27,6 +27,9 @@ $events = Get-WinEvent -Oldest -FilterHashtable $params
 $end_time = Get-Date $current_date -Format 'yyyy-MM-ddTHH:mm:ss.fffzzz'
 $end_time | Out-File .\date.txt
 
+### имя хоста, с которого запускается скрипт и логи которого скрипт читает ###
+$hostname = $env:computername
+
 foreach ($entry in $events) 
 {
   switch ($entry.Id)
@@ -44,6 +47,7 @@ foreach ($entry in $events)
       $domain = $entry.Properties[4].Value
 
       $message = "<b>computer account was moved</b>
+source: <pre>$hostname</pre>
 admin: <pre>$domain/$admin</pre>
 computer: <pre>$domain/$computer</pre>
 from OU: <pre>$oldDN</pre>
@@ -65,6 +69,7 @@ time: <pre>$ev_date</pre>"
       $OU = $OU.Remove($OU.IndexOf(",DC=",13))
 
       $message = "<b>computer account was created</b>
+source: <pre>$hostname</pre>
 admin: <pre>$domain/$admin</pre>
 computer: <pre>$domain/$computer</pre>
 OU: <pre>$OU</pre>
@@ -83,6 +88,7 @@ time: <pre>$ev_date</pre>"
       $domain = $entry.Properties[1].Value
 
       $message = "<b>computer account was deleted</b>
+source: <pre>$hostname</pre>
 admin: <pre>$domain/$admin</pre>
 computer: <pre>$domain/$computer</pre>
 time: <pre>$ev_date</pre>"
@@ -101,6 +107,7 @@ time: <pre>$ev_date</pre>"
       $displayName = Get-ADUser -Identity $user -Properties DisplayName | Select-Object -ExpandProperty DisplayName
 
       $message = "<b>user account was created</b>
+source: <pre>$hostname</pre>
 admin: <pre>$domain/$admin</pre>
 user: <pre>$domain/$user</pre>
 display name: <pre>$displayName</pre>
@@ -119,6 +126,7 @@ time: <pre>$ev_date</pre>"
       $domain = $entry.Properties[1].Value
 
       $message = "<b>user account was deleted</b>
+source: <pre>$hostname</pre>
 admin: <pre>$domain/$admin</pre>
 user: <pre>$domain/$user</pre>
 time: <pre>$ev_date</pre>"
@@ -138,6 +146,7 @@ time: <pre>$ev_date</pre>"
       $user = $cn.Remove($cn.IndexOf(",DC=",13))
       
       $message = "<b>user account was added to $group</b>
+source: <pre>$hostname</pre>
 admin: <pre>$domain/$admin</pre>
 user: <pre>$user</pre>
 time: <pre>$ev_date</pre>"
@@ -157,51 +166,139 @@ time: <pre>$ev_date</pre>"
       $user = $cn.Remove($cn.IndexOf(",DC=",13))
       
       $message = "<b>user account was removed from $group</b>
+source: <pre>$hostname</pre>
 admin: <pre>$domain/$admin</pre>
 user: <pre>$user</pre>
 time: <pre>$ev_date</pre>"
       Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
     }
 
-    ### System audit policy was changed ###
+    ### system audit policy was changed ###
     4719 
     {
       # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
-      $time = $entry.TimeCreated
-      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
-      
-      $message = "<b>system audit policy was changed</b>
-time: <pre>$ev_date</pre>"
+      $admin = $entry.Properties[1].Value
+      $domain = $entry.Properties[2].Value
+      $category = $entry.Properties[4].Value
+      $subcategory = $entry.Properties[5].Value
+      $changes = $entry.Properties[7].Value
+
+      $message = "<b>system audit policy changed </b>
+source: <pre>$hostname</pre>
+time: <pre>$ev_date</pre>
+admin: <pre>$domain/$admin</pre>
+category: <pre>$category</pre>
+subcategory: <pre>$subcategory</pre>
+changes: <pre>$changes</pre>"
+
       Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
     }
 
-    ### Audit log was cleared. This can relate to a potential attack ###
+    ### audit log was cleared. This can relate to a potential attack ###
     1102 
     {
       # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
       $time = $entry.TimeCreated
       $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
       
-      $message = "<b>Audit log was cleared. This can relate to a potential attack</b>
+      $message = "<b>audit log was cleared: potential attack</b>
+source: <pre>$hostname</pre>
 time: <pre>$ev_date</pre>"
+
       Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
     }
 
-    ### A user account was disabled ###
+    ### user account was disabled ###
     4725 
     {
       # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
       $time = $entry.TimeCreated
       $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+
+      $account = $entry.Properties[0].Value
+      $account_domain = $entry.Properties[1].Value
+      $admin = $entry.Properties[4].Value
+      $domain = $entry.Properties[5].Value
       
-      $message = "<b>A user account was disabled</b>
+      $message = "<b>user account was disabled</b>
+source: <pre>$hostname</pre>
+user: <pre>$account_domain/$account</pre>
+admin: <pre>$domain/$admin</pre>
 time: <pre>$ev_date</pre>"
+
+      Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+    }
+
+    ### scheduled task was created ###
+    4698 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+
+      $admin = $entry.Properties[1].Value
+      $domain = $entry.Properties[2].Value
+      $task = $entry.Properties[4].Value
+      
+      $message = "<b>scheduled task was created</b>
+source: <pre>$hostname</pre>
+user: <pre>$domain/$admin</pre>
+task: <pre>$task</pre>
+time: <pre>$ev_date</pre>"
+
+      if ($task -ne "\Microsoft\Windows\UpdateOrchestrator\AC Power Download") {
+        Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+      }
+      
+    }
+
+    ### account locked out  ###
+    4740 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+
+      $user = $entry.Properties[0].Value
+      $domain = $entry.Properties[5].Value
+      $computer = $entry.Properties[1].Value
+      
+      $message = "<b>account locked out</b>
+source: <pre>$hostname</pre>
+user: <pre>$domain/$user</pre>
+host: <pre>$computer</pre>
+time: <pre>$ev_date</pre>"
+
+      Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+    }
+
+    ### global group created ###
+    4727 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+      
+      $message = "<b>global group created</b>
+time: <pre>$ev_date</pre>"
+
+      Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
+    }
+
+    ### universal group created ###
+    4754 
+    {
+      # $name = $(($entry.Message).Split([Environment]::NewLine))[0]
+      $time = $entry.TimeCreated
+      $ev_date = $time.ToString("HH:mm:ss dd/MM/yyyy")
+      
+      $message = "<b>global group created</b>
+time: <pre>$ev_date</pre>"
+
       Send-TelegramTextMessage -BotToken $botToken -ChatID $chatId -Message $message
     }
   }
 }
-
-
 
 
 
